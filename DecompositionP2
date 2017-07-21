@@ -1,0 +1,40 @@
+#Vidal and Dawson Decomposition Steps/Components (PART TWO) -------------------------------
+def get_alphas(lambdas):
+	alphas = [-0.5*(lambdas[1]+lambdas[2]),0.5*(lambdas[1]+lambdas[3]) ,0.5*(lambdas[0]+lambdas[1])]
+	for i in range(3):
+		while alphas[i]<0:
+			alphas[i]+=np.pi/2
+		while alphas[i]>np.pi/2:
+			alphas[i]-=np.pi/2
+		if alphas[i]>np.pi/4:
+			alphas[i] -= 2*(alphas[i]-np.pi/4)
+	alphas = np.ndarray.tolist(np.sort(alphas))[::-1]
+	return alphas
+def decomposition2a(alphas,Va,Vb,Ua,Ub): # assumes that alpha_z is not equal to zero
+	theta1,theta2,theta3 = (-alphas[0]-np.pi/2),(-alphas[2]),(alphas[1])
+	u1,v1 = Va,Vb
+	u2 = (j/r2)*np.dot((X+Z),np.array([[np.cos(theta1),j*np.sin(theta1)],[j*np.sin(theta1),np.cos(theta1)]]))
+	v2 = np.array([[np.e**(j*theta2),0],[0,np.e**(-j*theta2)]])
+	u3,v3 = (-j/r2)*(X+Z),np.array([[np.e**(j*theta3),0],[0,np.e**(-j*theta3)]])
+	w = (I-j*X)/r2
+	u4,v4 = np.dot(Ua,w),np.dot(Ub,np.linalg.inv(w))
+	return [TensorProd2q(u1,v1),CNOT,TensorProd2q(u2,v2),CNOT,TensorProd2q(u3,v3),CNOT,TensorProd2q(u4,v4)]
+def decomposition2b(alphas,Va,Vb,Ua,Ub):
+	theta1,theta2 = -alphas[0],-alphas[1]
+	u2 = np.array([[np.cos(theta1),j*np.sin(theta1)],[j*np.sin(theta1), np.cos(theta1)]])
+	v2 = np.array([[np.e**(j*theta2),0],[0,np.e**(-j*theta2)]])
+	w= (I-j*X)/r2
+	wh = np.matrix.getH(w)
+	u1,v1,u3,v3 = np.dot(wh,Va),np.dot(w,Vb),np.dot(Ua,w),np.dot(Ub,wh)
+	return [TensorProd2q(u1,v1),CNOT,TensorProd2q(u2,v2),CNOT,TensorProd2q(u3,v3)]
+  
+  #Grand Decomposition,Altogether! (PART THREE)----------------------------------------------
+
+def decompose(U):
+	partone = decomposition1(U)
+	lambdas,Va,Vb,Ua,Ub = partone[0],partone[1],partone[2], partone[3], partone[4]
+	alphas = get_alphas(lambdas)
+	if (np.absolute(alphas[2])>nil):
+		return decomposition2a(alphas,Va,Vb,Ua,Ub)
+	else:
+		return decomposition2b(alphas,Va,Vb,Ua,Ub)
