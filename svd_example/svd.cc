@@ -66,14 +66,26 @@ int main()
 
     for(Real mix = 0; mix <= 1.; mix += 0.1)
         {
-            ITensor U(s1,s3),S(s3,s4),V(s2,s4);
+            ITensor U(s1),S,V;
+                // The only indices that we need to specify
+                // (or can) are the indices which we treat as indexing
+                // the 'rows' of the tensor we are svd-ing.
+                // We do this by creating U with those indices.
             auto Combo = (1-mix)*prod+mix*sing;
             Combo = Combo/norm(Combo);
-            SVD(Combo,U,S,V);
+            svd(Combo,U,S,V);
+                // The svd operation results in U having all of the 
+                // 'row' indices that we assigned to it, plus one more of type Link which it shares with the newly created S.
+            //Print(U);
+            //Print(S);
+            //Print(V);
             Real entropy = 0;
+            Index left_link = findtype(U, Link);
+            Index right_link = findtype(V, Link);
+                // Here the findtype function is used to let us grab the newly created indices.
             for(int j = 1; j<= 2; j+=1){
-                auto iv1 = IndexVal(s3,j);
-                auto iv2 = IndexVal(s4,j);
+                auto iv1 = IndexVal(left_link,j);
+                auto iv2 = IndexVal(right_link,j);
                 entropy += (-pow(S.real(iv1,iv2),2))*log(pow(S.real(iv1,iv2),2));
             }
             Print(entropy);
