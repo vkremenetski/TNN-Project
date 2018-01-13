@@ -43,7 +43,7 @@ ITensor IdentityTwoQubitGate(Index ind1, Index ind2, Index ind3,
     for(int i = 1; i<=2; i += 1)
     {
         for(int j = 1; j <= 2; j += 1) {
-            Indentity.set(ind1(i), ind2(j), ind3(i), ind4(j), 1);
+            Identity.set(ind1(i), ind2(j), ind3(i), ind4(j), 1);
         }
     }
     return Identity;
