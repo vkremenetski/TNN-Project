@@ -18,10 +18,28 @@ using namespace itensor;
 //           
 ITensor RandomTwoQubitGate(Index ind1, Index ind2, Index ind3,
         Index ind4) {
-    auto sTensor = randomTensor(ind1, ind2, ind3, ind4, prime(ind1));
-    ITensor U(ind1,ind2,ind3,ind4),S,V;
+    auto sTensor = randomTensor(ind1, ind2, ind3, ind4);
+
+    // The random tensor has elements in [0, 1]. It seems preferable to have
+    // them in [-1, 1] so we shift them.
+    auto shift_func = [](Real r) { return 2 * r - 1.0; };
+    sTensor.apply(shift_func);
+
+    // Only the incoming indices should be included in U in order for the
+    // resulting tensor to be unitary between the incoming and outgoing
+    // indices.
+    ITensor U(ind1,ind2),S,V;
     svd(sTensor,U,S,V);
-    return U;
+
+    // We replace the index that U and S shared with the one that S and V share
+    // so that we can contract U and V without S in the middle.
+    Index vs = commonIndex(S, V);
+    Index us = commonIndex(U, S);
+    U *= delta(us, vs);
+
+    // We return U*V in order to have a unitary that goes from the incoming
+    // to the outgoing indices.
+    return U * V;
 }
 
 
