@@ -22,8 +22,11 @@ ITensor RandomTwoQubitGate(Index ind1, Index ind2, Index ind3,
 
     // The random tensor has elements in [0, 1]. It seems preferable to have
     // them in [-1, 1] so we shift them.
-    auto shift_func = [](Real r) { return 2 * r - 1.0; };
-    sTensor.apply(shift_func);
+    // auto shift_func = [](Real r) { return 2 * r - 1.0; };
+    // sTensor.apply(shift_func);
+    // The above two lines are currently commented out because they send
+    // up a lot of warnings!
+    // TODO: Try with and without the shift once other code is working.
 
     // Only the incoming indices should be included in U in order for the
     // resulting tensor to be unitary between the incoming and outgoing
@@ -144,6 +147,95 @@ public:
             my_gates_[y][x/2] = new_gate;
         }
     }
+    
+
+    // This function starts at the "top" of the circuit (with ancilla qubits
+    // in the 0 state) and applies every gate down through the level of the
+    // circuit specified by level.
+    //
+    // Within a level, it applies the gates in order up to (and including)
+    // the gate at gate_position.
+    ITensor
+    contractDown(int level, int gate_position)  {
+        // TODO: Generate ancilla qubits at top of circuit, multiply them
+        // into bit tensor.
+        
+        // TODO: Loop through gates and apply them one at a time to this
+        // tensor.
+
+    }
+
+    // This function starts at the "bottom" of the circuit by contracting the
+    // entire conjugate wavefunction. It then applies the operator ham
+    // (usually but not necessarily a Hamiltonian) to the resulting conjugate
+    // wavefunction and contracts the entire wavefunction up through the level
+    // of the circuit specified by level.
+    //
+    // Within a level, it applies the gates in reverse order, up to (but
+    // not including) the gate at gate_position.
+    ITensor
+    contractUp(int level, int gate_position, const MPO & ham)  {
+        // We get the conjugate wavefunction.
+        ITensor to_return = contractDown(0, num_qubits_/2 - 1);
+        to_return = dag(to_return.prime());
+
+        // We apply the MPO operator.
+        for (int i = 0; i < num_qubits_; i++) {
+            auto mpo_index = findtype(ham.A(i + 1), Site).noprime();
+
+            // We set the indices up so our existing tensor will
+            // contract with this piece of the MPO.
+            to_return *= delta(prime(my_indices_[0][i]), prime(mpo_index));
+
+            // We contract with an MPO tensor (note that they are 1 indexed
+            // whereas we are zero-indexing our vectors).
+            to_return *= ham.A(i + 1);
+
+            // And we switch back to our indices.
+            to_return *= delta(my_indices_[0][i], mpo_index);
+        }
+
+        // At this point, we have contracted the entire conjugate wavefunction
+        // with the MPO. Now we need to contract up to the proper gate in
+        // our non-conjugated wavefunction network.
+
+        // TODO: Loop up through the gates and apply them one at a time
+        // to this tensor.
+    }
+
+    // This function evaluates the expectation value of an operator.
+    ITensor 
+    expectationValue(const MPO & ham) {
+        return contractUp(0, 0, ham) * contractDown(0, 0);
+    }
+
+    // This function finds the environment of a particular tensor.
+    ITensor
+    getEnvironment(int level, int gate_position, const MPO & ham) {
+        return contractUp(level, gate_position, ham) * contractDown(level,
+                gate_position - 1);
+    }
+
+    // This function updates a particular gate given that the others (and
+    // its conjugate) are frozen.
+    void
+    updateGate(int level, int gate_position, const MPO & ham) {
+        auto enviro = getEnvironment(level, gate_position, ham);
+
+
+        // TODO: Finish update implemenation with SVD.
+    }
+
+    // This function loops over each gate in the network and updates them
+    // all.
+    void
+    optimizationStep(const MPO & ham) {
+        // TODO: Loop over each gate and update all of them. 
+
+    }
+
+
+    
 
 private:
     // my_gates_ contains all of the two qubit gates in the model.
@@ -170,11 +262,36 @@ private:
     int num_qubits_;
 };
 
+// This function performs a few basic tests of the SimpleNetwork class.
+// It should either crash or return false if things are not working
+// properly.
+bool
+sanityChecksForSimpleNetwork() {
+    auto network_1 = SimpleNetwork(3, 4, true);
+    auto network_2 = SimpleNetwork(5, 8, false);
+
+    // TODO: After implementing the other TODO items, write some simple
+    // tests for the code. This isn't a very formal way of testing, but it
+    // is a good start.
+    //
+    // For example, does an expectation value calculation work? Does the
+    // calculation of an environment tensor return a tensor with the same
+    // index structure as the gate at that location? Does the contraction
+    // code even run properly? Do the update steps decrease the energy?
+    //
+    // You should check both the 4 and 8 qubit versions (the 16 qubit one might
+    // be too slow to mess with at first).
+
+    return false;
+
+}
+
 
 int main(int argc, char* argv[]) {
 
-    auto network_1 = SimpleNetwork(3, 4, true);
-    auto network_2 = SimpleNetwork(5, 8, false);
+
+    Print(sanityChecksForSimpleNetwork());
+    
 
 
     return 0;
