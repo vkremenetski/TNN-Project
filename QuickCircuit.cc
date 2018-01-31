@@ -94,6 +94,8 @@ public:
 
         // We resize our containers ahead of time so that we
         // can use the assignment operators easily.
+
+
         my_indices_.resize(circuit_depth + 1);
         my_gates_.resize(circuit_depth);
         for(int i = 0; i < circuit_depth; i++) {
@@ -147,22 +149,39 @@ public:
             my_gates_[y][x/2] = new_gate;
         }
     }
-    
-
     // This function starts at the "top" of the circuit (with ancilla qubits
     // in the 0 state) and applies every gate down through the level of the
     // circuit specified by level.
     //
-    // Within a level, it applies the gates in order up to (and including)
-    // the gate at gate_position.
+    // XX (Within a level, it applies the gates in order up to (and including)
+    // the gate at gate_position) XX.
+
+    // VLADIMIR: No longer including the gate at gate_position. I have modified
+    // subsequent code accordingly. Furthermore, in the code I assume that if "level"
+    // is the top level in the circuit, the corresponding ancilla qubit will not
+    // be applied to the target gate, nor to the gates beyond it (if there are any). 
     ITensor
     contractDown(int level, int gate_position)  {
-        // TODO: Generate ancilla qubits at top of circuit, multiply them
-        // into bit tensor.
-        
-        // TODO: Loop through gates and apply them one at a time to this
-        // tensor.
-
+        int  currentLevel = circuit_depth_ - 1;
+        ITensor env;
+        for(int x = 0; x < num_qubits_; x++) {
+            Index anIndex = my_indices_[currentLevel+1][x];
+            ITensor ancilla = ITensor(anIndex);
+            ancilla.set(anIndex(1),1);
+            env *= ancilla;
+        }
+        //VLADIMIR: Here, the variable "bound" determines how far along a level we go.
+        //I simply change bound when current level == target level, to avoid writing
+        // a separate but near identical case for that. Likewise for ContractUp.
+        int bound = num_qubits_/2;
+        while(currentLevel >= level) {
+            if(currentLevel==level){bound = gate_position;}
+            for(int x = 0; x < bound; x++) {
+                env *= my_gates_[currentLevel][x];
+            }
+            currentLevel--;
+        }
+        return env;
     }
 
     // This function starts at the "bottom" of the circuit by contracting the
@@ -176,7 +195,7 @@ public:
     ITensor
     contractUp(int level, int gate_position, const MPO & ham)  {
         // We get the conjugate wavefunction.
-        ITensor to_return = contractDown(0, num_qubits_/2 - 1);
+        ITensor to_return = contractDown(0, num_qubits_/2);
         to_return = dag(to_return.prime());
 
         // We apply the MPO operator.
@@ -194,26 +213,33 @@ public:
             // And we switch back to our indices.
             to_return *= delta(my_indices_[0][i], mpo_index);
         }
+        int currentLevel = 0;
+        int bound = 0;
+        while(currentLevel<= level){
+            if(level==currentLevel){bound = gate_position;}
+            for(int i=num_qubits_/2 -1; i > bound; i--){
+                to_return *= my_gates_[currentLevel][i];
+            }
+            currentLevel++;
+        }
 
         // At this point, we have contracted the entire conjugate wavefunction
         // with the MPO. Now we need to contract up to the proper gate in
         // our non-conjugated wavefunction network.
-
-        // TODO: Loop up through the gates and apply them one at a time
-        // to this tensor.
+        return to_return;
     }
 
     // This function evaluates the expectation value of an operator.
     ITensor 
     expectationValue(const MPO & ham) {
-        return contractUp(0, 0, ham) * contractDown(0, 0);
+        return contractUp(0, 1, ham) * contractDown(0, 0);
     }
 
     // This function finds the environment of a particular tensor.
     ITensor
     getEnvironment(int level, int gate_position, const MPO & ham) {
         return contractUp(level, gate_position, ham) * contractDown(level,
-                gate_position - 1);
+                gate_position);
     }
 
     // This function updates a particular gate given that the others (and
@@ -221,21 +247,27 @@ public:
     void
     updateGate(int level, int gate_position, const MPO & ham) {
         auto enviro = getEnvironment(level, gate_position, ham);
+        ITensor U, S, V;
+        svd(enviro,U,S,V);
+        Index us = commonIndex(U,S);
+        Index sv = commonIndex(S,V);
+        U *= delta(us, sv);
+        my_gates_[level][gate_position] = dag(U)*dag(V);
 
-
-        // TODO: Finish update implemenation with SVD.
     }
 
     // This function loops over each gate in the network and updates them
     // all.
     void
     optimizationStep(const MPO & ham) {
-        // TODO: Loop over each gate and update all of them. 
+        for(int i = 0; i< circuit_depth_; i++) {
+            for(int j = 0; j<num_qubits_; j++) {
+                updateGate(i,j, ham);
+            }
+        } 
 
     }
 
-
-    
 
 private:
     // my_gates_ contains all of the two qubit gates in the model.
@@ -262,36 +294,11 @@ private:
     int num_qubits_;
 };
 
-// This function performs a few basic tests of the SimpleNetwork class.
-// It should either crash or return false if things are not working
-// properly.
-bool
-sanityChecksForSimpleNetwork() {
-    auto network_1 = SimpleNetwork(3, 4, true);
-    auto network_2 = SimpleNetwork(5, 8, false);
-
-    // TODO: After implementing the other TODO items, write some simple
-    // tests for the code. This isn't a very formal way of testing, but it
-    // is a good start.
-    //
-    // For example, does an expectation value calculation work? Does the
-    // calculation of an environment tensor return a tensor with the same
-    // index structure as the gate at that location? Does the contraction
-    // code even run properly? Do the update steps decrease the energy?
-    //
-    // You should check both the 4 and 8 qubit versions (the 16 qubit one might
-    // be too slow to mess with at first).
-
-    return false;
-
-}
-
 
 int main(int argc, char* argv[]) {
 
-
-    Print(sanityChecksForSimpleNetwork());
-    
+    auto network_1 = SimpleNetwork(3, 4, true);
+    auto network_2 = SimpleNetwork(5, 8, false);
 
 
     return 0;
