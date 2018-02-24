@@ -111,9 +111,9 @@ public:
         for(int x = 0; x < num_qubits; x++) {
             std::string name_string;
             name_string += "index (";
-            name_string += x;
+            name_string += std::to_string(x);
             name_string += ",";
-            name_string += y;
+            name_string += std::to_string(y);
             name_string += ")";
             my_indices_[y][x] = Index(name_string, 2);
         }
@@ -249,12 +249,18 @@ public:
     void
     updateGate(int level, int gate_position, const MPO & ham) {
         auto enviro = getEnvironment(level, gate_position, ham);
+
+        Print(enviro);
+
         IndexSet ii = enviro.inds();
         ITensor U(my_indices_[level+1][2*gate_position],my_indices_[level+1][(2*gate_position+1)%num_qubits_]), S, V;
         svd(enviro, U,S,V);
         Index us = commonIndex(U,S);
         Index sv = commonIndex(S,V);
         U *= delta(us, sv);
+
+        Print(U);
+        Print(V);
         my_gates_[level][gate_position] = dag(U)*dag(V);
 
     }
