@@ -318,7 +318,7 @@ sanityChecksForSimpleNetwork() {
     auto H = MPO(ampo);
     ITensor d = network_2.contractUp(0,0,H);
     ITensor u = network_2.contractDown(0,1);
-    network_2.updateGate(2,1,H);
+    network_2.updateGate(1,1,H);
     ITensor env = network_2.contractUp(0,0,H);
     ITensor gate = network_2.contractDown(0,1);
     return rank(env*gate)-rank(u*d);
