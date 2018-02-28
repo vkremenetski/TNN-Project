@@ -1,0 +1,46 @@
+def decomposition2a(alphas,Va,Vb,Ua,Ub): # First V&D method - decomposes using THREE CNOT gates (assumes that alpha_z is not equal to zero)
+	u1,v1 = Va,Vb
+	u2,v2 = (j/r2)*np.dot((X+Z),expm(-j*(alphas[0]+np.pi/2)*X)),expm(-j*alphas[2]*Z)
+	u3,v3 = (-j/r2)*(X+Z),expm(j*alphas[1]*Z)
+	w,wh = (I-j*X)/r2,(I+j*X)/r2
+	u4,v4 = np.dot(Ua,w),np.dot(Ub,wh)
+	return [TensorProd2q(u1,v1),CNOT,TensorProd2q(u2,v2),CNOT,TensorProd2q(u3,v3),CNOT,TensorProd2q(u4,v4)]
+def decomposition2b(alphas,Va,Vb,Ua,Ub): # Second V&D method - decomposes using TWO CNOT gates (assumes alpha_z IS equal to zero)
+	u2,v2 = expm(-j*alphas[0]*X),expm(-j*alphas[1]*Z)
+	w,wh= (I-j*X)/r2,(I+j*X)/r2
+	u1,v1,u3,v3 = np.dot(wh,Va),np.dot(w,Vb),np.dot(Ua,w),np.dot(Ub,wh)
+	return [TensorProd2q(u1,v1),CNOT,TensorProd2q(u2,v2),CNOT,TensorProd2q(u3,v3)]
+
+#Useful methods and constants-----------------------------------------------------------------------------------
+def get_ev(fake_ev):#deals with convention of numpy's eigenvector output
+	return np.array([fake_ev[:,i] for i in range(len(fake_ev))])
+def complicate(n): #turns a purely real number into complex number so that numpy.log can be taken of negative numbers
+	return np.real(n)+j*(np.imag(n))
+def expm(m):#Computes e^M where M is a square matrix
+	eigenvalues,eigenvectors = np.linalg.eig(m)[0],get_ev(np.linalg.eig(m)[1])
+	eMatrix = np.zeros((len(m),len(m[0])))
+	for i in range(len(eigenvalues)):
+		eMatrix = eMatrix + ((np.e**eigenvalues[i])*np.tensordot(eigenvectors[i],eigenvectors[i],0))
+	return eMatrix
+def logm(m):#Computes log(M) where M is a square matrix
+	eigenvalues,eigenvectors = np.linalg.eig(m)[0],get_ev(np.linalg.eig(m)[1])
+	eMatrix = np.zeros((len(m),len(m[0])))
+	for i in range(len(eigenvalues)):
+		eMatrix = eMatrix + ((np.log(complicate(eigenvalues[i])))*np.tensordot(eigenvectors[i],eigenvectors[i],0))
+	return eMatrix
+def megadot(listy): #takes consecutive dot products of a list of matrices
+	assert len(listy)>0,"No matrices to multiply together"
+	if len(listy)==1:
+		return listy[0]
+	else:
+		return np.dot(listy[0],megadot(listy[1:]))
+def TensorProd2q(a,b): #Takes the tensor product of two single-qubit gates, returns as a 4-by-4 matrix
+	result = np.tensordot(a,b,0)
+	result = np.transpose(result,[0,2,1,3])
+	result = np.reshape(result,(4,4))
+	return result
+  
+j = 1j
+sq = np.sqrt
+r2 = np.sqrt(2)
+nil = 10**(-6)
