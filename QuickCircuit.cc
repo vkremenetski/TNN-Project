@@ -111,9 +111,9 @@ public:
         for(int x = 0; x < num_qubits; x++) {
             std::string name_string;
             name_string += "index (";
-            name_string += x;
+            name_string += std::to_string(x);
             name_string += ",";
-            name_string += y;
+            name_string += std::to_string(y);
             name_string += ")";
             my_indices_[y][x] = Index(name_string, 2);
         }
@@ -172,6 +172,7 @@ public:
             ancilla.set(anIndex(1),1);
             env *= ancilla;
         }
+
         //VLADIMIR: Here, the variable "bound" determines how far along a level we go.
         //I simply change bound when current level == target level, to avoid writing
         // a separate but near identical case for that. Likewise for ContractUp.
@@ -183,6 +184,7 @@ public:
             }
             currentLevel--;
         }
+
         return env;
     }
 
@@ -216,11 +218,14 @@ public:
             to_return *= delta(my_indices_[0][i], mpo_index);
         }
         int currentLevel = 0;
-        int bound = 0;
+        int bound = -1;
+        Print(to_return);
         while(currentLevel<= level){
             if(level==currentLevel){bound = gate_position;}
-            for(int i=num_qubits_/2 -1; i > bound; i--){
+            for(int i=num_qubits_/2 - 1; i > bound; i--){
                 to_return *= my_gates_[currentLevel][i];
+                Print(my_gates_[currentLevel][i]);
+                Print(to_return);
             }
             currentLevel++;
         }
@@ -249,12 +254,19 @@ public:
     void
     updateGate(int level, int gate_position, const MPO & ham) {
         auto enviro = getEnvironment(level, gate_position, ham);
+
+        Print(enviro);
+
         IndexSet ii = enviro.inds();
-        ITensor U(my_indices_[level+1][2*gate_position],my_indices_[level+1][(2*gate_position+1)%num_qubits_]), S, V;
+        int x_pos = 2 * gate_position + (1 + level) % 2;
+        ITensor U(my_indices_[level+1][x_pos],my_indices_[level+1][x_pos + 1]), S, V;
         svd(enviro, U,S,V);
         Index us = commonIndex(U,S);
         Index sv = commonIndex(S,V);
         U *= delta(us, sv);
+
+        Print(U);
+        Print(V);
         my_gates_[level][gate_position] = dag(U)*dag(V);
 
     }
@@ -316,12 +328,29 @@ sanityChecksForSimpleNetwork() {
         ampo += 0.5,"S-",j,"S+",j+1;
     }
     auto H = MPO(ampo);
+<<<<<<< HEAD
     ITensor d = network_2.contractUp(0,0,H);
     ITensor u = network_2.contractDown(0,1);
     network_2.updateGate(1,1,H);
     ITensor env = network_2.contractUp(0,0,H);
     ITensor gate = network_2.contractDown(0,1);
     return rank(env*gate)-rank(u*d);
+=======
+    ITensor u = network_2.contractDown(1,1);
+    ITensor d = network_2.contractUp(1,1,H);
+
+    Print(u);
+    Print(d);
+
+    Print(u * d);
+    network_2.updateGate(2,1,H);
+    
+    ITensor u_new = network_2.contractDown(1,1);
+    ITensor d_new = network_2.contractUp(1,1,H);
+
+
+    return rank(u*d) - rank(u_new*d_new);
+>>>>>>> ea5e17b10ef5582ded470a469ca6da48c7eff54a
 
 }
 
