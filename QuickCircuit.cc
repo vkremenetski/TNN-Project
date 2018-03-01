@@ -219,13 +219,13 @@ public:
         }
         int currentLevel = 0;
         int bound = -1;
-        Print(to_return);
+        //Print(to_return);
         while(currentLevel<= level){
             if(level==currentLevel){bound = gate_position;}
             for(int i=num_qubits_/2 - 1; i > bound; i--){
                 to_return *= my_gates_[currentLevel][i];
-                Print(my_gates_[currentLevel][i]);
-                Print(to_return);
+                //Print(my_gates_[currentLevel][i]);
+                //Print(to_return);
             }
             currentLevel++;
         }
@@ -254,20 +254,30 @@ public:
     void
     updateGate(int level, int gate_position, const MPO & ham) {
         auto enviro = getEnvironment(level, gate_position, ham);
+        auto gate = getGate(level, gate_position);
 
-        Print(enviro);
+        Print(enviro * gate);
 
         IndexSet ii = enviro.inds();
         int x_pos = 2 * gate_position + (1 + level) % 2;
         ITensor U(my_indices_[level+1][x_pos],my_indices_[level+1][x_pos + 1]), S, V;
         svd(enviro, U,S,V);
-        Index us = commonIndex(U,S);
         Index sv = commonIndex(S,V);
+        Index us = commonIndex(U,S);
+        /*for(int i = 1; i<= us.size();i++){
+            auto x = S.get(us(i),sv(i));
+            if(x>0){
+                U.set(us(i), -1*U.get(us(i)));
+            }
+        }*/
         U *= delta(us, sv);
 
-        Print(U);
-        Print(V);
-        my_gates_[level][gate_position] = dag(U)*dag(V);
+        //PrintDat(S);
+        //Print(V);
+        my_gates_[level][gate_position] = -dag(U)*dag(V);
+
+        gate = -dag(U) * dag(V);
+        Print(enviro * gate);
 
     }
     ITensor
@@ -328,16 +338,16 @@ sanityChecksForSimpleNetwork() {
         ampo += 0.5,"S-",j,"S+",j+1;
     }
     auto H = MPO(ampo);
-<<<<<<< HEAD
-    ITensor d = network_2.contractUp(0,0,H);
+
+    /*ITensor d = network_2.contractUp(0,0,H);
     ITensor u = network_2.contractDown(0,1);
     network_2.updateGate(1,1,H);
     ITensor env = network_2.contractUp(0,0,H);
     ITensor gate = network_2.contractDown(0,1);
     return rank(env*gate)-rank(u*d);
-=======
-    ITensor u = network_2.contractDown(1,1);
-    ITensor d = network_2.contractUp(1,1,H);
+
+    u = network_2.contractDown(1,1);
+    d = network_2.contractUp(1,1,H);
 
     Print(u);
     Print(d);
@@ -346,11 +356,18 @@ sanityChecksForSimpleNetwork() {
     network_2.updateGate(2,1,H);
     
     ITensor u_new = network_2.contractDown(1,1);
-    ITensor d_new = network_2.contractUp(1,1,H);
+    ITensor d_new = network_2.contractUp(1,1,H);*/
+    printfln("Old Expectation Value", network_2.expectationValue(H));
+    network_2.updateGate(1,1,H);
+    network_2.updateGate(1,1,H);
+    Real e = network_2.expectationValue(H);
+    /*for(int i = 0; i<50; i++){
+        network_2.optimizationStep(H);
+        e = network_2.expectationValue(H);
+        printfln("Energy Estimate ", e);
+    }*/
+    return  e;
 
-
-    return rank(u*d) - rank(u_new*d_new);
->>>>>>> ea5e17b10ef5582ded470a469ca6da48c7eff54a
 
 }
 
