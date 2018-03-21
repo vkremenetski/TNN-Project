@@ -343,11 +343,12 @@ class meraNetwork : public SimpleNetwork{
                         Index ind3 = my_indices_[i+1][2*j];
                         Index ind4 = my_indices_[i+1][(2*j+1) %(2*ng)];
                         printfln("Hey, this is level", j);
-                        my_gates_[i][j] = IdentityTwoQubitGate(ind1,ind2,ind3,ind4);
-                        if (g == 2) {
-                            my_gates_[i-1][(j+1)%ng] *= delta(ind1,ind2);
-                            my_gates_[i-1][(j)%ng] *= delta(ind1,ind2);
+                        if(g == 0) {
+                            my_gates_[i][j] = IdentityTwoQubitGate(ind1,ind2,ind3,ind4);
+                        } else {
+                            my_gates_[i][j] = IdentityTwoQubitGate(ind2,ind1,ind3,ind4);
                         }
+                        
                     }
                 }
             }
