@@ -69,7 +69,19 @@ ITensor IdentityTwoQubitGate(Index ind1, Index ind2, Index ind3,
     }
     return Identity;
 }
-
+/* This function returns a gate for swapping the qubits at indices 
+   ind 1 and ind 2.
+            ind3        ind4
+             |           |
+                |     |
+                   ||  
+                |     |
+             |           |
+            ind1        ind2
+*/
+ITensor SwapGate(Index ind1, Index ind2, Index ind3, Index ind4){
+    return delta(ind1, ind4)*delta(ind2, ind3);
+}
 
 // SimpleNetwork contains all of the tensors in our model, and is 
 // able to optimize the model for a given Hamiltonian.
@@ -98,9 +110,11 @@ public:
 
         my_indices_.resize(circuit_depth + 1);
         my_gates_.resize(circuit_depth);
+        update_.resize(circuit_depth);
         for(int i = 0; i < circuit_depth; i++) {
             my_indices_[i].resize(num_qubits);
             my_gates_[i].resize(num_qubits / 2);
+            update_[i].resize(num_qubits/2);
         }
         my_indices_[circuit_depth].resize(num_qubits);
 
@@ -139,12 +153,16 @@ public:
             // set it to be the identity, otherwise we initialize
             // with a random unitary.
             ITensor new_gate;
-            if (is_periodic || x < num_qubits - 1)
+            if (is_periodic || x < num_qubits - 1){
                 new_gate =  RandomTwoQubitGate(ind1,
                         ind2, ind3, ind4);
-            else
+                update_[y][x/2] = true;
+            }
+            else{
                 new_gate = IdentityTwoQubitGate(ind1,
                         ind2, ind3, ind4);
+                update_[y][x/2] = false;
+            }
 
             my_gates_[y][x/2] = new_gate;
         }
@@ -219,13 +237,10 @@ public:
         }
         int currentLevel = 0;
         int bound = -1;
-        //Print(to_return);
         while(currentLevel<= level){
             if(level==currentLevel){bound = gate_position;}
             for(int i=num_qubits_/2 - 1; i > bound; i--){
                 to_return *= my_gates_[currentLevel][i];
-                //Print(my_gates_[currentLevel][i]);
-                //Print(to_return);
             }
             currentLevel++;
         }
@@ -255,49 +270,35 @@ public:
     updateGate(int level, int gate_position, const MPO & ham) {
         auto enviro = getEnvironment(level, gate_position, ham);
         auto gate = getGate(level, gate_position);
-
-        Print(enviro * gate);
-
-        IndexSet ii = enviro.inds();
         int x_pos = 2 * gate_position + (1 + level) % 2;
-        ITensor U(my_indices_[level+1][x_pos],my_indices_[level+1][x_pos + 1]), S, V;
+        ITensor U(my_indices_[level+1][x_pos],my_indices_[level+1][(x_pos + 1)%num_qubits_]), S, V;
         svd(enviro, U,S,V);
         Index sv = commonIndex(S,V);
         Index us = commonIndex(U,S);
-        /*for(int i = 1; i<= us.size();i++){
-            auto x = S.get(us(i),sv(i));
-            if(x>0){
-                U.set(us(i), -1*U.get(us(i)));
-            }
-        }*/
         U *= delta(us, sv);
-
-        //PrintDat(S);
-        //Print(V);
-        my_gates_[level][gate_position] = -dag(U)*dag(V);
-
-        gate = -dag(U) * dag(V);
-        Print(enviro * gate);
-
+        my_gates_[level][gate_position] = dag(U)*dag(V);
     }
     ITensor
     getGate(int level, int gate_position){
         return my_gates_[level][gate_position];
     }
 
-    // This function loops over each gate in the network and updates them
-    // all.
+    /* This function loops over each gate in the network and updates 
+       the non-fixed gates (i.e. not identity or swap).
+    */
     void
     optimizationStep(const MPO & ham) {
         for(int i = 0; i< circuit_depth_; i++) {
             for(int j = 0; j<num_qubits_/2; j++) {
-                updateGate(i,j, ham);
+                if(update_[i][j]){
+                    updateGate(i,j, ham);
+                }
             }
         } 
-
     }
-
-private:
+// These variables are labeled protected so that they're accessible
+// from the subclasses.
+protected:
     // my_gates_ contains all of the two qubit gates in the model.
     // The first index should access the "level" of the circuit, 
     // and the second accesses left to right in the tensor network
@@ -311,7 +312,11 @@ private:
     // network diagram.
     std::vector< std::vector<Index> > my_indices_;
 
+    //update_ contains booleans indicating whether the gates
+    // in my_gates_ at the same indices should be updated.
+    std::vector< std::vector<bool> > update_;
 
+private:
     // Set to True if model is periodic, else False.
     bool is_periodic_;
 
@@ -321,51 +326,91 @@ private:
     // The number of qubits.
     int num_qubits_;
 };
+class meraNetwork : public SimpleNetwork{
+    public:
+        meraNetwork(std::vector< std::vector<int> > layout, bool is_periodic): 
+        SimpleNetwork(sizeof(layout), sizeof(layout[0])*2, is_periodic){
+            layout_ = layout;
+            int ng = sizeof(layout[0]); //number of gates per level
+            int l = sizeof(layout); //level count of the circuit
+            for(int i = 0; i < l; i++){
+                for(int j =0; j < ng; j++){
+                    int g = layout_[i][j];
+                    if(g!=1){
+                        update_[i][j] = false;
+                        Index ind1 = my_indices_[i][2*j];
+                        Index ind2 = my_indices_[i][(2*j+1) % (2*ng)];
+                        Index ind3 = my_indices_[i+1][2*j];
+                        Index ind4 = my_indices_[i+1][(2*j+1) %(2*ng)];
+                        printfln("Hey, this is level", j);
+                        my_gates_[i][j] = IdentityTwoQubitGate(ind1,ind2,ind3,ind4);
+                        if (g == 2) {
+                            my_gates_[i-1][(j+1)%ng] *= delta(ind1,ind2);
+                            my_gates_[i-1][(j)%ng] *= delta(ind1,ind2);
+                        }
+                    }
+                }
+            }
+        }
+    private:
+        //layout_ keeps track of the desired layout of the circuit.
+        // 0 stands for "identity", 1 for "random unitary", and 2 for SWAP.
+        std::vector< std::vector<int> > layout_;
+};
 
 Real
 sanityChecksForSimpleNetwork() {
     auto network_1 = SimpleNetwork(3, 4, true);
-    auto network_2 = SimpleNetwork(5,8,false);
+    auto network_2 = SimpleNetwork(9,8,false);
     int N = 8;
-    auto sites = SpinOne(N);
-
+    auto sites = SpinHalf(N);
     auto psi = MPS(sites);
 
     auto ampo = AutoMPO(sites);
     for(int j = 1; j < N; ++j) {
         ampo += "Sz",j,"Sz",j+1;
-        ampo += 0.5,"S+",j,"S-",j+1;
+        ampo += 0.9,"S+",j,"S-",j+1;
         ampo += 0.5,"S-",j,"S+",j+1;
     }
+
     auto H = MPO(ampo);
-
-    /*ITensor d = network_2.contractUp(0,0,H);
-    ITensor u = network_2.contractDown(0,1);
-    network_2.updateGate(1,1,H);
-    ITensor env = network_2.contractUp(0,0,H);
-    ITensor gate = network_2.contractDown(0,1);
-    return rank(env*gate)-rank(u*d);
-
-    u = network_2.contractDown(1,1);
-    d = network_2.contractUp(1,1,H);
-
-    Print(u);
-    Print(d);
-
-    Print(u * d);
-    network_2.updateGate(2,1,H);
-    
-    ITensor u_new = network_2.contractDown(1,1);
-    ITensor d_new = network_2.contractUp(1,1,H);*/
+    //Regular periodic Mera for 8 qubits
+    std::vector< std::vector<int> > layout8q;
+    layout8q.resize(5);
+    for(int i = 0; i < 5; i++) {
+        layout8q[i].resize(4);
+        if (i <= 1)
+        {
+            for(int j = 0; j<4; j++){
+                layout8q[i][j] = 1;
+            }
+        }
+    }
+    layout8q[4][1] = 1;
+    layout8q[3][1] = 1;
+    layout8q[3][2] = 1;
+    layout8q[2][0] = 2;
+    layout8q[2][1] = 1;
+    layout8q[2][2] = 2;
+    /*auto state = meraNetwork(layout8q,true);*/
     printfln("Old Expectation Value", network_2.expectationValue(H));
-    network_2.updateGate(1,1,H);
-    network_2.updateGate(1,1,H);
     Real e = network_2.expectationValue(H);
+    Index i1 = Index("s1",2);
+    Index i2 = Index("s2",2);
+    Index i3 = prime(i1);
+    Index i4 = prime(i2);
+    auto a = meraNetwork(layout8q,true);
+    //auto g = SwapGate(i1,i2,i3,i4);
     /*for(int i = 0; i<50; i++){
         network_2.optimizationStep(H);
         e = network_2.expectationValue(H);
         printfln("Energy Estimate ", e);
-    }*/
+    }
+    /*auto sweeps = Sweeps(5);
+    sweeps.maxm() = 50,50,100,100,200;300;
+    sweeps.cutoff() = 1E-9;
+    Real e = dmrg(psi,H,sweeps,"Quiet");
+    /*Real e = network_2.expectationValue(H);*/
     return  e;
 
 
