@@ -308,6 +308,7 @@ protected:
     // my_indices contains all of the Index objects that are
     // used by the gate Tensors in the model.
     // The first index should access the "level" of the circuit,
+    
     // and the second accesses the qubits left to right in the tensor
     // network diagram.
     std::vector< std::vector<Index> > my_indices_;
@@ -329,10 +330,10 @@ private:
 class meraNetwork : public SimpleNetwork{
     public:
         meraNetwork(std::vector< std::vector<int> > layout, bool is_periodic): 
-        SimpleNetwork(sizeof(layout), sizeof(layout[0])*2, is_periodic){
+        SimpleNetwork(layout.size(), layout[0].size()*2, is_periodic){
             layout_ = layout;
-            int ng = sizeof(layout[0]); //number of gates per level
-            int l = sizeof(layout); //level count of the circuit
+            int ng = layout[0].size(); //number of gates per level
+            int l = layout.size(); //level count of the circuit
             for(int i = 0; i < l; i++){
                 for(int j =0; j < ng; j++){
                     int g = layout_[i][j];
@@ -370,7 +371,7 @@ sanityChecksForSimpleNetwork() {
     auto ampo = AutoMPO(sites);
     for(int j = 1; j < N; ++j) {
         ampo += "Sz",j,"Sz",j+1;
-        ampo += 0.9,"S+",j,"S-",j+1;
+        ampo += 0.5,"S+",j,"S-",j+1;
         ampo += 0.5,"S-",j,"S+",j+1;
     }
 
@@ -393,21 +394,20 @@ sanityChecksForSimpleNetwork() {
     layout8q[2][0] = 2;
     layout8q[2][1] = 1;
     layout8q[2][2] = 2;
-    /*auto state = meraNetwork(layout8q,true);*/
+    auto state = meraNetwork(layout8q,true);
     printfln("Old Expectation Value", network_2.expectationValue(H));
     Real e = network_2.expectationValue(H);
     Index i1 = Index("s1",2);
     Index i2 = Index("s2",2);
     Index i3 = prime(i1);
     Index i4 = prime(i2);
-    auto a = meraNetwork(layout8q,true);
     //auto g = SwapGate(i1,i2,i3,i4);
     /*for(int i = 0; i<50; i++){
         network_2.optimizationStep(H);
         e = network_2.expectationValue(H);
         printfln("Energy Estimate ", e);
     }
-    /*auto sweeps = Sweeps(5);
+    /*auto sweeps = Sweeps(5)
     sweeps.maxm() = 50,50,100,100,200;300;
     sweeps.cutoff() = 1E-9;
     Real e = dmrg(psi,H,sweeps,"Quiet");
