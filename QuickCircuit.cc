@@ -358,6 +358,7 @@ class meraNetwork : public SimpleNetwork{
         // 0 stands for "identity", 1 for "random unitary", and 2 for SWAP.
         std::vector< std::vector<int> > layout_;
 };
+//Creates a layout for a simple 4-qubit MERA
 std::vector<std::vector<int>>
 simpleMERA4q() {
     std::vector<std::vector<int>> layout;
@@ -371,6 +372,7 @@ simpleMERA4q() {
     layout[2][0] = 1;
     return layout;
 }
+//Creates a layout for a simple, 8-qubit MERA
 std::vector<std::vector<int>>
 simpleMERA8q() {
     std::vector<std::vector<int>> layout;
@@ -391,6 +393,7 @@ simpleMERA8q() {
     layout[4][1] = 1;
     return layout;
 }
+//creates a layout for the branching 4-qubit MERA
 std::vector<std::vector<int>>
 branchingMERA4q() {
     std::vector<std::vector<int>> layout;
@@ -406,6 +409,7 @@ branchingMERA4q() {
     layout[2][0] = 2;
     return layout;
 }
+//Creates the layout for the branching, 8-qubit MERA
 std::vector<std::vector<int>>
 branchingMERA8q() {
     std::vector<std::vector<int>> layout;
@@ -461,6 +465,7 @@ sanityChecksForSimpleNetwork() {
     e = dmrg(psi,H,sweeps,"Quiet");
     return  e;
 }
+//Returns the sign of a given Real number
 int
 sign(Real x){
     if(x>0){
@@ -473,22 +478,52 @@ sign(Real x){
         return -1;
     }
 }
+//Returns a MERA with N qubits that is branching if 
+// comparison is 'b' and is simple otherwise.
+/*meraNetwork
+setMERA(int N, char comparison){
+    if(comparison == 'b'){
+        if(N==4){
+            return meraNetwork(branchingMERA4q(),false);
+        }
+        else{
+            return meraNetwork(branchingMERA8q(),true);
+        }
+    }
+    else{
+        if(N==4){
+            return meraNetwork(simpleMERA4q(),false);
+        }
+        else{
+            return meraNetwork(simpleMERA8q(),true);
+        }
+    }
+}*/
+/*Returns the ratio of the SimpleNetwork ground state energy estimate
+ * to that of the MERA, as well as the sign of the ground state Energy.
+ * All of this is done for the BASIC Hamiltonian.
+ * N is the numer of qubits.
+ * comparison is 'b' to compare to branching MERA and 's' to compare to
+ * Simple MERA.
+ * w1 and w2 are the weights assigned to Sz and the raising/lowering operators
+ * respectively.
+ */
 Real
-basicHamiltonian(float w1,float w2,float w3,int N,char comparison){
+basicHamiltonian(float w1,float w2,int N,char comparison){
     auto sites = SpinHalf(N);
     auto psi = MPS(sites);
     auto ampo = AutoMPO(sites);
     for(int j = 1; j<N; j++){
         ampo += w1, "Sz", j, "Sz",j+1;
         ampo += w2*0.5,"S+",j,"S-",j+1;
-        ampo += w3*0.5,"S-",j,"S+",j+1;
+        ampo += w2*0.5,"S-",j,"S+",j+1;
     }
     int adjustment = -10;
     ampo += adjustment, "Id", 1;
     meraNetwork MERA = meraNetwork(simpleMERA4q(), false);
     auto H = MPO(ampo);
     SimpleNetwork simpleCircuit = SimpleNetwork(3,4,false);
-    if(comparison=='b'){
+    /*if(comparison=='b'){
         if(N==4){
             MERA = meraNetwork(branchingMERA4q(),false);
             simpleCircuit = SimpleNetwork(4,4,false);
@@ -507,8 +542,8 @@ basicHamiltonian(float w1,float w2,float w3,int N,char comparison){
             MERA = meraNetwork(simpleMERA8q(), true);
             simpleCircuit = SimpleNetwork(5,8,true);
         }
-    }
-    for(int i = 0; i<15000; i++){
+    }*/
+    for(int i = 0; i<2000; i++){
         MERA.optimizationStep(H);
         simpleCircuit.optimizationStep(H);
         if(i%1000==0){
@@ -526,7 +561,7 @@ basicHamiltonian(float w1,float w2,float w3,int N,char comparison){
 
 int main(int argc, char* argv[]) {
     //Real e = sanityChecksForSimpleNetwork();
-    Real ratio = basicHamiltonian(0.1,0.9,0.9,8,'b');
+    Real ratio = basicHamiltonian(0.1,0.9,8,'b');
     /*for(int w1 = 0; w1<=20; w1++){
         ratio = basicHamiltonian(w1/20.0,1-(w1/20.0),1-(w1/20.0),8,'b');
         if(ratio < 1 and (ratio > 0 or ratio <-1)){
