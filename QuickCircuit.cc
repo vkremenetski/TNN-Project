@@ -339,11 +339,10 @@ class meraNetwork : public SimpleNetwork{
                     int g = layout_[i][j];
                     if(g!=1){
                         update_[i][j] = false;
-                        Index ind1 = my_indices_[i][2*j];
-                        Index ind2 = my_indices_[i][(2*j+1) % (2*ng)];
-                        Index ind3 = my_indices_[i+1][2*j];
-                        Index ind4 = my_indices_[i+1][(2*j+1) %(2*ng)];
-                        printfln("Hey, this is level", j);
+                        Index ind1 = my_indices_[i][2*j+((i+1)%2)];
+                        Index ind2 = my_indices_[i][(2*j+1+((i+1)%2)) % (2*ng)];
+                        Index ind3 = my_indices_[i+1][2*j+((i+1)%2)];
+                        Index ind4 = my_indices_[i+1][(2*j+1+((i+1)%2)) %(2*ng)];
                         if(g == 0) {
                             my_gates_[i][j] = IdentityTwoQubitGate(ind1,ind2,ind3,ind4);
                         } else {
@@ -359,11 +358,82 @@ class meraNetwork : public SimpleNetwork{
         // 0 stands for "identity", 1 for "random unitary", and 2 for SWAP.
         std::vector< std::vector<int> > layout_;
 };
-
+std::vector<std::vector<int>>
+simpleMERA4q() {
+    std::vector<std::vector<int>> layout;
+    layout.resize(3);
+    for(int i =0; i<3; i++){
+        layout[i].resize(2);
+    }
+    layout[0][0] = 1;
+    layout[1][0] = 1;
+    layout[1][1] = 1;
+    layout[2][0] = 1;
+    return layout;
+}
+std::vector<std::vector<int>>
+simpleMERA8q() {
+    std::vector<std::vector<int>> layout;
+    layout.resize(5);
+    for(int i = 0; i<5; i++){
+        layout[i].resize(4);
+        if(i<=1){
+            for(int j = 0; j<4; j++){
+                layout[i][j] = 1;
+            }
+        }
+    }
+    layout[2][2] = 2;
+    layout[2][1] = 1;
+    layout[2][0] = 2;
+    layout[3][2] = 1;
+    layout[3][1] = 1;
+    layout[4][1] = 1;
+    return layout;
+}
+std::vector<std::vector<int>>
+branchingMERA4q() {
+    std::vector<std::vector<int>> layout;
+    layout.resize(4);
+    for(int i = 0; i<4; i++){
+        layout[i].resize(2);
+        if(i==1 or i==3){
+            layout[i][0] = 1;
+            layout[i][1] = 1;
+        }
+    }
+    layout[0][0] = 1;
+    layout[2][0] = 2;
+    return layout;
+}
+std::vector<std::vector<int>>
+branchingMERA8q() {
+    std::vector<std::vector<int>> layout;
+    layout.resize(8);
+    for(int i=0; i<8; i++){
+        layout[i].resize(4);
+        if(i<=1 or i==5 or i==7){
+            for(int j=0; j<4; j++){
+                layout[i][j] = 1;
+            }
+        }
+    }
+    layout[2][0] = 2;
+    layout[2][1] = 2;
+    layout[2][2] = 2;
+    layout[3][1] = 2;
+    layout[3][2] = 2;
+    layout[4][0] = 1;
+    layout[4][1] = 2;
+    layout[4][2] = 1;
+    layout[6][0] = 2;
+    layout[6][2] = 2;
+    return layout;
+}
 Real
 sanityChecksForSimpleNetwork() {
-    auto network_1 = SimpleNetwork(3, 4, true);
-    auto network_2 = SimpleNetwork(9,8,false);
+    auto network_1 = SimpleNetwork(3, 4, false);
+    auto network_2 = SimpleNetwork(8,8,true);
     int N = 8;
     auto sites = SpinHalf(N);
     auto psi = MPS(sites);
@@ -374,50 +444,96 @@ sanityChecksForSimpleNetwork() {
         ampo += 0.5,"S+",j,"S-",j+1;
         ampo += 0.5,"S-",j,"S+",j+1;
     }
-
+    ampo += -10, "Id", 1;
     auto H = MPO(ampo);
-    //Regular periodic Mera for 8 qubits
-    std::vector< std::vector<int> > layout8q;
-    layout8q.resize(5);
-    for(int i = 0; i < 5; i++) {
-        layout8q[i].resize(4);
-        if (i <= 1)
-        {
-            for(int j = 0; j<4; j++){
-                layout8q[i][j] = 1;
-            }
+    printfln("ExpectationValue SimpleCircuit: ", network_2.expectationValue(H));
+    for(int i = 0; i<400; i++){
+        network_2.optimizationStep(H);
+        if(i%40==0){
+            printfln("Updated Expectation Value: ", network_2.expectationValue(H));
         }
     }
-    layout8q[4][1] = 1;
-    layout8q[3][1] = 1;
-    layout8q[3][2] = 1;
-    layout8q[2][0] = 2;
-    layout8q[2][1] = 1;
-    layout8q[2][2] = 2;
-    auto state = meraNetwork(layout8q,true);
-    printfln("Old Expectation Value", network_2.expectationValue(H));
+    printfln("New ExpectationValue SimpleCircuit: ", network_2.expectationValue(H));
     Real e = network_2.expectationValue(H);
-    Index i1 = Index("s1",2);
-    Index i2 = Index("s2",2);
-    Index i3 = prime(i1);
-    Index i4 = prime(i2);
-    //auto g = SwapGate(i1,i2,i3,i4);
-    /*for(int i = 0; i<50; i++){
-        network_2.optimizationStep(H);
-        e = network_2.expectationValue(H);
-        printfln("Energy Estimate ", e);
-    }
-    /*auto sweeps = Sweeps(5)
-    sweeps.maxm() = 50,50,100,100,200;300;
+    auto sweeps = Sweeps(5);
+    sweeps.maxm() = 50,50,100,100,200,300;
     sweeps.cutoff() = 1E-9;
-    Real e = dmrg(psi,H,sweeps,"Quiet");
-    /*Real e = network_2.expectationValue(H);*/
+    e = dmrg(psi,H,sweeps,"Quiet");
     return  e;
-
-
 }
+int
+sign(Real x){
+    if(x>0){
+        return 1;
+    }
+    else if(x==0){
+        return 0;
+    }
+    else{
+        return -1;
+    }
+}
+Real
+basicHamiltonian(float w1,float w2,float w3,int N,char comparison){
+    auto sites = SpinHalf(N);
+    auto psi = MPS(sites);
+    auto ampo = AutoMPO(sites);
+    for(int j = 1; j<N; j++){
+        ampo += w1, "Sz", j, "Sz",j+1;
+        ampo += w2*0.5,"S+",j,"S-",j+1;
+        ampo += w3*0.5,"S-",j,"S+",j+1;
+    }
+    int adjustment = -10;
+    ampo += adjustment, "Id", 1;
+    meraNetwork MERA = meraNetwork(simpleMERA4q(), false);
+    auto H = MPO(ampo);
+    SimpleNetwork simpleCircuit = SimpleNetwork(3,4,false);
+    if(comparison=='b'){
+        if(N==4){
+            MERA = meraNetwork(branchingMERA4q(),false);
+            simpleCircuit = SimpleNetwork(4,4,false);
+        }
+        else{
+            MERA = meraNetwork(branchingMERA8q(),true);
+            simpleCircuit = SimpleNetwork(8,8,true);
+        }
+    }
+    else{
+        if(N==4){
+            MERA = meraNetwork(simpleMERA4q(),false);
+            simpleCircuit = SimpleNetwork(3,4,false);
+        }
+        else{
+            MERA = meraNetwork(simpleMERA8q(), true);
+            simpleCircuit = SimpleNetwork(5,8,true);
+        }
+    }
+    for(int i = 0; i<15000; i++){
+        MERA.optimizationStep(H);
+        simpleCircuit.optimizationStep(H);
+        if(i%1000==0){
+            printfln("MERA Expectation: ", MERA.expectationValue(H)-adjustment);
+            printfln("SimpleNetwork Expectation: ", simpleCircuit.expectationValue(H)-adjustment);
+        }
+    }
+    Real m = MERA.expectationValue(H)-adjustment;
+    Real s = simpleCircuit.expectationValue(H)-adjustment;
+    printfln("MERA: ", m);
+    printfln("SC: ", s);
+    return (s/m)*sign(m);
+}
+    
 
 int main(int argc, char* argv[]) {
-    Real e = sanityChecksForSimpleNetwork();
-    printfln("Updated Expectation Value ", e);
+    //Real e = sanityChecksForSimpleNetwork();
+    Real ratio = basicHamiltonian(0.1,0.9,0.9,8,'b');
+    /*for(int w1 = 0; w1<=20; w1++){
+        ratio = basicHamiltonian(w1/20.0,1-(w1/20.0),1-(w1/20.0),8,'b');
+        if(ratio < 1 and (ratio > 0 or ratio <-1)){
+            printfln("Ratio: ",ratio);
+            printfln("w1: ", w1);
+            printfln("","");
+        }
+    }*/
+    printfln("Ratio: ", ratio);
 }
