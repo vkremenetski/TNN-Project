@@ -480,7 +480,7 @@ sign(Real x){
 }
 //Returns a MERA with N qubits that is branching if 
 // comparison is 'b' and is simple otherwise.
-/*meraNetwork
+meraNetwork
 setMERA(int N, char comparison){
     if(comparison == 'b'){
         if(N==4){
@@ -498,7 +498,28 @@ setMERA(int N, char comparison){
             return meraNetwork(simpleMERA8q(),true);
         }
     }
-}*/
+}
+//returns a Simple Network with N qubits and the depth of
+//a MERA that is branching if comparison is 'b' and simple otherwise.
+SimpleNetwork
+setSimpleNet(int N, char comparison){
+    if(comparison == 'b'){
+        if(N==4){
+            return SimpleNetwork(4,4,false);
+        }
+        else{
+            return SimpleNetwork(8,8,true);
+        }
+    }
+    else{
+        if(N==4){
+            return SimpleNetwork(3,4,false);
+        }
+        else{
+            return SimpleNetwork(5,8,true);
+        }
+    }
+}
 /*Returns the ratio of the SimpleNetwork ground state energy estimate
  * to that of the MERA, as well as the sign of the ground state Energy.
  * All of this is done for the BASIC Hamiltonian.
@@ -520,30 +541,10 @@ basicHamiltonian(float w1,float w2,int N,char comparison){
     }
     int adjustment = -10;
     ampo += adjustment, "Id", 1;
-    meraNetwork MERA = meraNetwork(simpleMERA4q(), false);
     auto H = MPO(ampo);
-    SimpleNetwork simpleCircuit = SimpleNetwork(3,4,false);
-    /*if(comparison=='b'){
-        if(N==4){
-            MERA = meraNetwork(branchingMERA4q(),false);
-            simpleCircuit = SimpleNetwork(4,4,false);
-        }
-        else{
-            MERA = meraNetwork(branchingMERA8q(),true);
-            simpleCircuit = SimpleNetwork(8,8,true);
-        }
-    }
-    else{
-        if(N==4){
-            MERA = meraNetwork(simpleMERA4q(),false);
-            simpleCircuit = SimpleNetwork(3,4,false);
-        }
-        else{
-            MERA = meraNetwork(simpleMERA8q(), true);
-            simpleCircuit = SimpleNetwork(5,8,true);
-        }
-    }*/
-    for(int i = 0; i<2000; i++){
+    meraNetwork MERA = setMERA(N,comparison);
+    SimpleNetwork simpleCircuit = setSimpleNet(N,comparison);
+    for(int i = 0; i<5000; i++){
         MERA.optimizationStep(H);
         simpleCircuit.optimizationStep(H);
         if(i%1000==0){
@@ -558,16 +559,78 @@ basicHamiltonian(float w1,float w2,int N,char comparison){
     return (s/m)*sign(m);
 }
     
-
+Real
+heisenbergHamiltonian(Real w1, Real w2, Real w3, Real w4, int N, char comparison){
+    auto sites = SpinHalf(N);
+    auto ampo = AutoMPO(sites);
+    auto psi = MPS(sites);
+    for(int j = 1; j<N; j++){
+        ampo += w1, "Sx", j, "Sx", j+1;
+        ampo += w2, "Sy", j, "Sy", j+1;
+        ampo += w3, "Sz", j, "Sz", j+1;
+        ampo += w4, "Sz", j;
+    }
+    int adjustment = -10;
+    ampo+= adjustment, "Id", 1;
+    auto H = MPO(ampo);
+    meraNetwork MERA = setMERA(N, comparison);
+    SimpleNetwork simpleCircuit = setSimpleNet(N, comparison);
+    for(int i = 0; i<500; i++){
+        MERA.optimizationStep(H);
+        simpleCircuit.optimizationStep(H);
+        /*if(i%500==0){
+            printfln("MERA: ", MERA.expectationValue(H)-adjustment);
+            printfln("SC: ", simpleCircuit.expectationValue(H)-adjustment);
+        }*/
+    }
+    /*auto sweeps = Sweeps(5);
+    sweeps.maxm() = 50,50,100,100,200;
+    sweeps.cutoff() = 1E-9;
+    printfln("DMRG: ", dmrg(psi,H,sweeps,"Quiet"));*/
+    Real m = MERA.expectationValue(H)-adjustment;
+    Real s = simpleCircuit.expectationValue(H)-adjustment;
+    return (s/m)*sign(m);
+}
+Real
+j1J2Hamiltonian(Real w1, Real w2, int N, char comparison){
+    auto sites = SpinHalf(N);
+    auto ampo = AutoMPO(sites);
+    auto psi = MPS(sites);
+    for(int j = 1; j<N; j++){
+        ampo += w1, "Sx", j, "Sx", j+1;
+        ampo += w1, "Sy", j, "Sy", j+1;
+        ampo += w1, "Sz", j, "Sz", j+1;
+    }
+    for(int j = 1; j<N-1; j++){
+        ampo += w2, "Sx", j, "Sx", j+2;
+        ampo += w2, "Sy", j, "Sy", j+2;
+        ampo += w2, "Sz", j, "Sz", j+2;
+    }
+    int adjustment = -10;
+    ampo += adjustment, "Id", 1;
+    auto H = MPO(ampo);
+    meraNetwork MERA = setMERA(N, comparison);
+    SimpleNetwork SN = setSimpleNet(N, comparison);
+    for(int i = 1; i <= 6000; i++){
+        MERA.optimizationStep(H);
+        SN.optimizationStep(H);
+        if(i%200==0){
+            printfln("MERA: ", MERA.expectationValue(H)-adjustment);
+            printfln("SN: ", SN.expectationValue(H)-adjustment);
+        }
+    }
+    Real m = MERA.expectationValue(H)-adjustment;
+    Real s = SN.expectationValue(H)-adjustment;
+    return (s/m)*sign(m);
+}
 int main(int argc, char* argv[]) {
-    //Real e = sanityChecksForSimpleNetwork();
-    Real ratio = basicHamiltonian(0.1,0.9,8,'b');
-    /*for(int w1 = 0; w1<=20; w1++){
-        ratio = basicHamiltonian(w1/20.0,1-(w1/20.0),1-(w1/20.0),8,'b');
-        if(ratio < 1 and (ratio > 0 or ratio <-1)){
-            printfln("Ratio: ",ratio);
-            printfln("w1: ", w1);
-            printfln("","");
+    Real ratio = j1J2Hamiltonian(0.25,0.75,8, 'b'); 
+    /*for(int i = 0; i<21; i++){
+        ratio = j1J2Hamiltonian(i/20.0,1-(i/20.0),8,'b');
+        if(ratio < 1 and ( ratio > 0 or ratio < -1.05)){
+            printfln("Ratio: ", ratio);
+            printfln("w1: ", i);
+            printfln("");
         }
     }*/
     printfln("Ratio: ", ratio);
