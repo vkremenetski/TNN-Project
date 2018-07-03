@@ -1,7 +1,9 @@
 #include "itensor/all.h"
 #include <vector>
 #include <string>
-
+#include <iostream>
+#include <fstream>
+using namespace std;
 using namespace itensor;
 
 
@@ -250,6 +252,16 @@ public:
         // our non-conjugated wavefunction network.
         return to_return;
     }
+    //returns overlap with another ITensor
+    Cplx overlap(ITensor state){
+        ITensor ket = contractDown(0,num_qubits_/2);
+        ITensor bra = dag(state);
+        IndexSet otherSet = bra.inds();
+        for(int i =1; i<= num_qubits_; i++){
+            state *= delta(my_indices_[0][i-1], otherSet.index(i));
+        }
+        return (bra*ket).cplx();
+    }
 
     // This function evaluates the expectation value of an operator.
     Real
@@ -281,6 +293,45 @@ public:
     ITensor
     getGate(int level, int gate_position){
         return my_gates_[level][gate_position];
+    }
+    void
+    printGate(int level, int position){
+        ITensor g = getGate(level, position);
+        Index ind1 = my_indices_[level][2*position+((level+1)%2)];
+        Index ind2 = my_indices_[level][(2*position+1+((level+1)%2))%num_qubits_];
+        Index ind3 = my_indices_[level+1][2*position+((level+1)%2)];
+        Index ind4 = my_indices_[level+1][(2*position+1+((level+1)%2))%num_qubits_];
+        for(int i = 1; i<=2; i++){
+            for(int j = 1; j<=2; j++){
+                for(int k = 1; k<=2; k++){
+                    for(int l = 1; l<=2; l++){
+                        printf(" ", g.cplx(ind1(i),ind2(j),ind3(k),ind4(l)));
+                    }
+                }
+                printfln("");
+            }
+        }
+    }
+    void
+    printGateFile(string fileName, int level, int position){
+        ITensor g = getGate(level, position);
+        Index ind1 = my_indices_[level][2*position+((level+1)%2)];
+        Index ind2 = my_indices_[level][(2*position+1+((level+1)%2))%num_qubits_];
+        Index ind3 = my_indices_[level+1][2*position+((level+1)%2)];
+        Index ind4 = my_indices_[level+1][(2*position+1+((level+1)%2))%num_qubits_];
+        ofstream myfile;
+        myfile.open(fileName);
+        myfile << fileName << ":\n";
+        for(int i = 1; i<=2; i++){
+            for(int j = 1; j<=2; j++){
+                for(int k = 1; k<=2; k++){
+                    for(int l = 1; l<=2; l++){
+                        myfile << " " << g.cplx(ind1(i),ind2(j),ind3(k),ind4(l));
+                    }
+                }
+                myfile << "\n";
+            }
+        }
     }
 
     /* This function loops over each gate in the network and updates 
@@ -513,7 +564,7 @@ setSimpleNet(int N, char comparison){
     }
     else{
         if(N==4){
-            return SimpleNetwork(3,4,false);
+            return SimpleNetwork(4,4,false);
         }
         else{
             return SimpleNetwork(5,8,true);
@@ -583,16 +634,16 @@ heisenbergHamiltonian(Real w1, Real w2, Real w3, Real w4, int N, char comparison
             printfln("SC: ", simpleCircuit.expectationValue(H)-adjustment);
         }*/
     }
-    /*auto sweeps = Sweeps(5);
+    auto sweeps = Sweeps(5);
     sweeps.maxm() = 50,50,100,100,200;
     sweeps.cutoff() = 1E-9;
-    printfln("DMRG: ", dmrg(psi,H,sweeps,"Quiet"));*/
+    printfln("DMRG: ", dmrg(psi,H,sweeps,"Quiet"));
     Real m = MERA.expectationValue(H)-adjustment;
     Real s = simpleCircuit.expectationValue(H)-adjustment;
     return (s/m)*sign(m);
 }
 Real
-j1J2Hamiltonian(Real w1, Real w2, int N, char comparison){
+j1J2Hamiltonian(Real w1, Real w2, Real w3, int N, char comparison){
     auto sites = SpinHalf(N);
     auto ampo = AutoMPO(sites);
     auto psi = MPS(sites);
@@ -606,32 +657,64 @@ j1J2Hamiltonian(Real w1, Real w2, int N, char comparison){
         ampo += w2, "Sy", j, "Sy", j+2;
         ampo += w2, "Sz", j, "Sz", j+2;
     }
-    int adjustment = -10;
+    for(int j = 1; j<=N; j++){
+        ampo+= w3, "Sz", j;
+    }
+    int adjustment = -100;
     ampo += adjustment, "Id", 1;
     auto H = MPO(ampo);
     meraNetwork MERA = setMERA(N, comparison);
     SimpleNetwork SN = setSimpleNet(N, comparison);
-    for(int i = 1; i <= 6000; i++){
+    for(int i = 1; i <= 5000; i++){
         MERA.optimizationStep(H);
         SN.optimizationStep(H);
-        if(i%200==0){
+        if(i%10000==0){
             printfln("MERA: ", MERA.expectationValue(H)-adjustment);
             printfln("SN: ", SN.expectationValue(H)-adjustment);
         }
     }
+    /*Index i1 = Index("a",2);
+    Index i2 = Index("b",2);
+    Index i3 = Index("c",2);
+    Index i4 = Index("d",2);
+    ITensor a = ITensor(i1,i2,i3,i4);
+    a.set(i1(0),i2(1),i3(1),i4(0),-0.5);
+    a.set(i1(1),i2(0),i3(0),i4(1),-1.4);
+    printfln("Overlap: ", SN.overlap(a));*/
     Real m = MERA.expectationValue(H)-adjustment;
     Real s = SN.expectationValue(H)-adjustment;
+    MERA.printGateFile("MERAGate1.txt",0,0);
+    MERA.printGateFile("MERAGate2.txt",1,0);
+    MERA.printGateFile("MERAGate3.txt",1,1);
+    MERA.printGateFile("MERAGate4.txt",2,0);
+    ITensor I = SN.contractDown(0,2);
+    ITensor J = dag(I);
+    printfln("Inner Product: ", (SN).overlap(I));
     return (s/m)*sign(m);
 }
 int main(int argc, char* argv[]) {
-    Real ratio = j1J2Hamiltonian(0.25,0.75,8, 'b'); 
-    /*for(int i = 0; i<21; i++){
-        ratio = j1J2Hamiltonian(i/20.0,1-(i/20.0),8,'b');
-        if(ratio < 1 and ( ratio > 0 or ratio < -1.05)){
-            printfln("Ratio: ", ratio);
-            printfln("w1: ", i);
-            printfln("");
+    Real ratio = j1J2Hamiltonian(0.8,0.8,0.2,4,'s');
+    ofstream myfile;
+    myfile.open("Sample.txt");
+    myfile << "\n";
+    myfile << "Take it down now slow";
+    myfile << "\n";
+    myfile << "Tis July " << 4 << "th, and we are ready";
+    myfile.close();
+    return 0;
+    /*for(int i =0; i<10; i++){
+        ratio = j1J2Hamiltonian(8,8,2,4,'s');
+    }*/
+    /*for(int i = 0; i<5; i++){
+        for(int j=0; j<5; j++){
+            ratio = j1J2Hamiltonian(i/5.0,j/5.0,1-(i+j)/10.0,4,'s');
+            if(ratio < 1 and (ratio >0 or ratio < -1.05)){
+                printfln("Ratio: ", ratio);
+                printfln("w1: ", i/5.0);
+                printfln("w2: ", j/5.0);
+                printfln("");
+            }
         }
     }*/
-    printfln("Ratio: ", ratio);
+    //printfln("Ratio: ", ratio);
 }
