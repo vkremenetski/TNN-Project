@@ -683,10 +683,12 @@ j1J2Hamiltonian(Real w1, Real w2, Real w3, int N, char comparison){
     printfln("Overlap: ", SN.overlap(a));*/
     Real m = MERA.expectationValue(H)-adjustment;
     Real s = SN.expectationValue(H)-adjustment;
-    MERA.printGateFile("MERAGate1.txt",0,0);
-    MERA.printGateFile("MERAGate2.txt",1,0);
-    MERA.printGateFile("MERAGate3.txt",1,1);
-    MERA.printGateFile("MERAGate4.txt",2,0);
+    SN.printGateFile("SNGate1.txt",0,0);
+    SN.printGateFile("SNGate2.txt",1,0);
+    SN.printGateFile("SNGate3.txt",1,1);
+    SN.printGateFile("SNGate4.txt",2,0);
+    SN.printGateFile("SNGate5.txt",3,0);
+    SN.printGateFile("SNGate6.txt",3,1);
     ITensor I = SN.contractDown(0,2);
     ITensor J = dag(I);
     printfln("Inner Product: ", (SN).overlap(I));
@@ -694,14 +696,6 @@ j1J2Hamiltonian(Real w1, Real w2, Real w3, int N, char comparison){
 }
 int main(int argc, char* argv[]) {
     Real ratio = j1J2Hamiltonian(0.8,0.8,0.2,4,'s');
-    ofstream myfile;
-    myfile.open("Sample.txt");
-    myfile << "\n";
-    myfile << "Take it down now slow";
-    myfile << "\n";
-    myfile << "Tis July " << 4 << "th, and we are ready";
-    myfile.close();
-    return 0;
     /*for(int i =0; i<10; i++){
         ratio = j1J2Hamiltonian(8,8,2,4,'s');
     }*/
